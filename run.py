@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 
 DOMAIN = 'https://www.stohrermusic.com/'
 PAGES = {}
+OUTPUT_FNAME = 'index.txt'
 
 @dataclass(frozen=True)
 class Link:
@@ -48,7 +49,7 @@ class Page:
         doc = BeautifulSoup(text)
         for anchor in doc.find_all('a'):
             href = anchor.get('href')
-            if href is None or href.startswith('#') or href.endswith('.jpg'):
+            if href is None or href.startswith('#') or href.endswith('.jpg') or href.endswith('.JPG') or href.endswith('.jpeg'):
                 print(f'skipping because href is {href}')
                 continue
             # Remove `#` anchor from the end of the link for deduplication
@@ -56,14 +57,16 @@ class Page:
 
             text = anchor.text
             link = Link(href, text)
-            if link.is_internal() and link.href not in PAGES:
+            if not link.is_internal():
+                # Link is external so store in external links
+                self.external_links.append(link)
+                continue
+            if link.href not in PAGES:
                 # Create a new page and add it to PAGES
                 print(f'Adding {link.href} to PAGES')
                 new_page = type(self)(link.href)
                 PAGES[link.href] = new_page
                 new_page.fetch_and_process()
-            else:
-                self.external_links.append(link)
 
     @property
     def url(self):
@@ -102,14 +105,26 @@ class Page:
         while prototyping)
         """
 
-def build_page():
-    for url, page in sorted(PAGES.items()):
-        pass
-
-
-if __name__ == '__main__':
+def fetch_all():
     home = ''
     base = Page(home)
     PAGES[home] = base
     base.fetch_and_process()
+
+def build_page():
+    lines = []
+    for url, page in sorted(PAGES.items()):
+        lines.append(url)
+        for link in page.external_links:
+            lines.append(f'    {link.href} | {link.text}')
+    with open(OUTPUT_FNAME, 'w') as writer:
+        writer.write('\n'.join(lines))
+    print(f'Output written to {OUTPUT_FNAME}')
+
+
+
+
+
+if __name__ == '__main__':
+    fetch_all()
     build_page()
