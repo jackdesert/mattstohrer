@@ -12,6 +12,7 @@ DOMAIN = 'https://www.stohrermusic.com/'
 PAGES = {}
 OUTPUT_FNAME = 'index.html'
 
+
 @dataclass(frozen=True)
 class Link:
     href: str
@@ -22,7 +23,8 @@ class Link:
         If this a link to a page on Matt's site, return True.
         Otherwise, return False.
         """
-        return (DOMAIN in self.href)
+        return DOMAIN in self.href
+
 
 class Page:
     CACHE_DIR = 'cache'
@@ -50,11 +52,27 @@ class Page:
         doc = BeautifulSoup(text)
         for anchor in doc.find_all('a'):
             href = anchor.get('href')
-            if href is None or href.startswith('#') or href.endswith('.jpg') or href.endswith('.JPG') or href.endswith('.jpeg'):
+            if (
+                href is None
+                or href.startswith('#')
+                or href.endswith('.png?ssl=1')
+                or href.endswith('.jpg')
+                or href.endswith('.jpg?ssl=1')
+                or href.endswith('.JPG')
+                or href.endswith('.jpeg')
+                or href == 'https://generatepress.com'
+            ):
                 print(f'skipping because href is {href}')
                 continue
+
             # Remove `#` anchor from the end of the link for deduplication
             href = href.split('#')[0]
+
+            # Remove references from amazon links
+            href = href.split('ref=')[0]
+
+            if href == '':
+                href = 'https://www.stohrermusic.com'
 
             text = anchor.text
             link = Link(href, text)
@@ -99,17 +117,16 @@ class Page:
                 writer.write(text)
             return text
 
-
     def _filename(self):
         """
         To make fewer server request (and to improve speed
         while prototyping)
         """
 
+
 def fetch_all():
-    home = ''
-    base = Page(home)
-    PAGES[home] = base
+    base = Page(DOMAIN)
+    PAGES[DOMAIN] = base
     base.fetch_and_process()
 
 
@@ -121,22 +138,85 @@ def build_page():
 
 
 def template():
-    return Template('''
+    return Template(
+        '''
+        <!DOCTYPE html>
+        <html lang='en'>
+        <head>
+            <meta charset='utf-8'>
+            <meta http-equiv='X-UA-Compatible' content='IE=edge'>
+            <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+            <meta name='description' content='An exhaustive list of each page from stohrermusic.com, with external links'>
+            <meta name='author' content='Jack Desert'>
+            <title>Stalking Matt Stohrer</title>
+        </head>
+    <style>
+        html{
+            font-size: 18px;
+            font-family: roman;
+        }
+        html,div,ul,ol,h1,h2,h3{
+            margin: 0;
+            padding: 0;
+            font-size: 1rem;
+        }
+        h1{
+            font-size: 2rem;
+        }
+        ul,ol{
+            list-style-position: inside;
+        }
+        .odd{
+            background: #ddd;
+        }
+        .page{
+            padding: 0.5rem;
+            font-size: 1.3rem;
+        }
+        .elink{
+            font-size: 1.1rem;
+            padding-left: 2rem;
+            font-family: arial;
+            margin-top: 0.4rem;
+        }
+    </style>
+    </head>
+
     <body>
-    <h2>Pages from stohrermusic.com</h2>
+    <h1>Stalking Matt Stohrer</h1>
+   <p>
+    Matt has a lot of great content, and some of it is hard for me to find.
+    So I set out to catalogue all the pages on his site for my easy
+    reference.
+   </p>
+    <p>What you see here is an easy reference to each and and every page on stohrermusic.com, ordered by url.
+       With each page is a list of the external links from that page.
+   </p>
+   <p>
+       Happy saxophone repairing!
+       </p>
     <ol>
     {% for url, page in pages %}
-        <li> {{ url }}
+        <div class='page {{ loop.cycle("odd", "even") }}'>
+        Page {{ loop.index }}: <a href='{{ url }}'> {{ url }} </a>
+        {% if page.external_links %}
+            <div class='elink'>External links:</div>
+        {% endif %}
             <ul>
                 {% for link in page.external_links %}
-                    <li>{{ link.href }} | {{ link.text }}</li>
+                    <li class='elink'><a href='{{ link.href }}'>{{ link.href }}</a> &nbsp;  "{{ link.text }}"</li>
                 {% endfor %}
             </ul>
-        </li>
+        </div>
     {% endfor %}
     </ol>
+    <div class='footer'>
+    Source code available at <a href='https://github.com/jackdesert/stohrermusic.com'>github.com/jackdesert/stohrermusic.com</a>
+    </div>
     </body>
-    ''')
+    '''
+    )
+
 
 if __name__ == '__main__':
     fetch_all()

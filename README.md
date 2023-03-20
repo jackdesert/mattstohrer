@@ -5,7 +5,7 @@ For fans of the open saxophone project and Matt Stohrer,
 this repository can generate a sitemap.
 
 You could go to https://stohrermusic.com/sitemap.xml
-and click through the links there. But who wants to read html??
+and click through the links there. But who wants to read xml??
 
 Format
 ------
