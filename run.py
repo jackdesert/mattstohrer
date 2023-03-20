@@ -1,4 +1,5 @@
 import os
+from jinja2 import Template
 import hashlib
 from dataclasses import dataclass
 
@@ -9,7 +10,7 @@ from bs4 import BeautifulSoup
 
 DOMAIN = 'https://www.stohrermusic.com/'
 PAGES = {}
-OUTPUT_FNAME = 'index.txt'
+OUTPUT_FNAME = 'index.html'
 
 @dataclass(frozen=True)
 class Link:
@@ -111,19 +112,31 @@ def fetch_all():
     PAGES[home] = base
     base.fetch_and_process()
 
+
 def build_page():
-    lines = []
-    for url, page in sorted(PAGES.items()):
-        lines.append(url)
-        for link in page.external_links:
-            lines.append(f'    {link.href} | {link.text}')
+    html = template().render(pages=sorted(PAGES.items()))
     with open(OUTPUT_FNAME, 'w') as writer:
-        writer.write('\n'.join(lines))
+        writer.write(html)
     print(f'Output written to {OUTPUT_FNAME}')
 
 
-
-
+def template():
+    return Template('''
+    <body>
+    <h2>Pages from stohrermusic.com</h2>
+    <ol>
+    {% for url, page in pages %}
+        <li> {{ url }}
+            <ul>
+                {% for link in page.external_links %}
+                    <li>{{ link.href }} | {{ link.text }}</li>
+                {% endfor %}
+            </ul>
+        </li>
+    {% endfor %}
+    </ol>
+    </body>
+    ''')
 
 if __name__ == '__main__':
     fetch_all()
