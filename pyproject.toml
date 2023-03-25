@@ -1,8 +1,8 @@
 [tool.poetry]
-name = "stoh"
+name = "mattstohrer"
 version = "0.1.0"
 description = ""
-authors = ["jack <jack>"]
+authors = ["Jack Desert"]
 readme = "README.md"
 
 [tool.poetry.dependencies]

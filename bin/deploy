@@ -1,0 +1,3 @@
+#! /bin/bash
+
+rsync robots.txt index.html mattstohrer.jackdesert.com:/var/www/stoh
