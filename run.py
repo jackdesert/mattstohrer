@@ -31,11 +31,13 @@ class Page:
     # Create cache directory
     Path(CACHE_DIR).mkdir(exist_ok=True)
 
+    __slots__ = ('path', 'external_links', 'title',)
     def __init__(self, path):
         if path.startswith(DOMAIN):
             path = path.replace(DOMAIN, '', 1)
         self.path = path
         self.external_links = []
+        self.title = None
 
     def fetch_and_process(self):
         """
@@ -50,6 +52,7 @@ class Page:
 
         text = self._fetch()
         doc = BeautifulSoup(text)
+        self.title = doc.title.text.replace(' – Stohrer Music', '')
         for anchor in doc.find_all('a'):
             href = anchor.get('href')
             if (
@@ -203,7 +206,8 @@ def template():
     <ol>
     {% for url, page in pages %}
         <div class='page {{ loop.cycle("odd", "even") }}'>
-        Page {{ loop.index }}: <a href='{{ url }}'> {{ url }} </a>
+        Page {{ loop.index }}: {{ page.title }}
+        <div class='url'><a href='{{ url }}'> {{ url }} </a></div>
         {% if page.external_links %}
             <div class='elink'>External links:</div>
         {% endif %}
