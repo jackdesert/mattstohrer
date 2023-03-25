@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup
 
 DOMAIN = 'https://www.stohrermusic.com/'
 PAGES = {}
+TITLE = 'The Complete Works of Matt Stohrer'
 OUTPUT_FNAME = 'index.html'
 
 
@@ -136,7 +137,7 @@ def fetch_all():
 
 
 def build_page():
-    html = template().render(pages=sorted(PAGES.items()))
+    html = template().render(title=TITLE, pages=sorted(PAGES.items()))
     with open(OUTPUT_FNAME, 'w') as writer:
         writer.write(html)
     print(f'Output written to {OUTPUT_FNAME}')
@@ -153,7 +154,7 @@ def template():
             <meta name='viewport' content='width=device-width, initial-scale=1.0'>
             <meta name='description' content='If you want to see each and every page that Matt Stohrer has posted on saxophone repair, this list is your boy.'>
             <meta name='author' content='Jack Desert'>
-            <title>Stalking Matt Stohrer</title>
+            <title>{{ title }}</title>
         </head>
     <style>
         html{
@@ -194,11 +195,10 @@ def template():
     </head>
 
     <body>
-    <h1>Stalking Matt Stohrer</h1>
+    <h1>{{ title }}</h1>
    <p>
-    Matt has a lot of great content, but some of it was hard for me to find.
-    What you see here is an easy reference to each and and every page on
-    stohrermusic.com, in alphabetical order by url.
+    An easy reference to each and and every page on
+    <a href='https://stohrermusic.com'>stohrermusic.com</a>, in alphabetical order by url.
    </p>
    <p>
        Happy saxophone repairing!
