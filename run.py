@@ -1,23 +1,119 @@
-import os
-from jinja2 import Template
 import hashlib
-from dataclasses import dataclass
-
+import os
 from pathlib import Path
+from time import sleep
+
 import ipdb
 import requests
+import urllib3
 from bs4 import BeautifulSoup
+from jinja2 import Template
 
 DOMAIN = 'https://www.stohrermusic.com/'
 PAGES = {}
 TITLE = 'The Complete Works of Matt Stohrer'
 OUTPUT_FNAME = 'index.html'
 
+# Use a common user agent so some sites like theowanne.com will return 200 instead of 403
+USER_AGENT = (
+    'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1'
+)
 
-@dataclass(frozen=True)
-class Link:
+
+class CacheUtil:
+    """
+    Utils for caching.
+    Note this is a separate class so it can clearly be referenced
+    from other modules.
+    """
+
+    CACHE_DIR = 'cache'
+    # Create cache directory
+    Path(CACHE_DIR).mkdir(exist_ok=True)
+
+    @classmethod
+    def fname(cls, url):
+        """
+        builds the sha256 of `url`
+        """
+        sha = hashlib.sha256()
+        sha.update(url.encode())
+        return os.path.join(cls.CACHE_DIR, sha.hexdigest())
+
+    @classmethod
+    def invalidate(cls, url):
+        """
+        Invalidate the cache for this url
+        """
+
+        fname = cls.fname(url)
+        try:
+            os.unlink(fname)
+            print(f'Invalidated cache for {url}')
+        except FileNotFoundError:
+            print(f'ERROR: Not found in cache: {url}')
+
+
+class Fetchable:
+    """
+    Abstract class that supports fetching a url and storing it
+    in filesystem cache for future retrieval.
+    """
+
+    def __init__(self):
+        raise TypeError('Do not instantiate directly. Subclass instead')
+
+    @property
+    def url(self):
+        raise TypeError('Subclass must overwrite this method')
+
+    @property
+    def _cache_fname(self):
+        return CacheUtil.fname(self.url)
+
+    def _fetch(self):
+        """
+        First attempt to read from filesystem cache.
+        Otherwise fetch from the internet
+        """
+        try:
+            # First attempt to read from cache
+            with open(self._cache_fname, encoding=UTF8) as reader:
+                return reader.read()
+        except FileNotFoundError:
+            # Fetch from network
+            pass
+
+        print(f'fetching {self.url}')
+        headers = {'User-agent': USER_AGENT}
+        sleep(1)
+        try:
+            req = requests.get(self.url, headers=headers, verify=False, timeout=60)
+            text = req.text
+        except (
+            requests.exceptions.InvalidSchema,
+            requests.exceptions.InvalidURL,
+            requests.exceptions.ConnectionError,
+            urllib3.exceptions.NewConnectionError,
+        ) as exc:
+            # Set the title to show up
+            text = f'<head><title content="ERROR: {exc}" /></head>'
+        # Save to cache for next time
+        with open(self._cache_fname, 'w', encoding=UTF8) as writer:
+            writer.write(text)
+        return text
+
+
+class Link(Fetchable):
     href: str
     text: str
+
+    __slots__ = ('href', 'text')
+
+    def __init__(self, href, text):
+        self.href = href
+        self.text = text
+        self.title = self.fetch_title()
 
     def is_internal(self):
         """
@@ -26,13 +122,33 @@ class Link:
         """
         return DOMAIN in self.href
 
+    @property
+    def url(self):
+        return self.href
 
-class Page:
-    CACHE_DIR = 'cache'
-    # Create cache directory
-    Path(CACHE_DIR).mkdir(exist_ok=True)
+    def fetch_title(self):
+        """
+        Fetch the url and return the page <title>
+        """
+        html = self._fetch()
+        doc = BeautifulSoup(html, features='lxml')
+        if doc is None or (len(doc) == 0):
+            return '(Broken Link)'
+        if not doc.title:
+            return f'{self.url} (No title)'
+        title = doc.title.text
+        print(f'{self.href}: {title}')
+        return title
 
-    __slots__ = ('path', 'external_links', 'title',)
+
+class Page(Fetchable):
+
+    __slots__ = (
+        'path',
+        'external_links',
+        'title',
+    )
+
     def __init__(self, path):
         if path.startswith(DOMAIN):
             path = path.replace(DOMAIN, '', 1)
@@ -52,7 +168,7 @@ class Page:
         """
 
         text = self._fetch()
-        doc = BeautifulSoup(text)
+        doc = BeautifulSoup(text, features='lxml')
         self.title = doc.title.text.replace(' – Stohrer Music', '')
         for anchor in doc.find_all('a'):
             href = anchor.get('href')
@@ -68,7 +184,7 @@ class Page:
                 or href.endswith('.jpeg')
                 or href == 'https://generatepress.com'
             ):
-                print(f'skipping because href is {href}')
+                print(f'    skipping because href is {href}')
                 continue
 
             # Remove `#` anchor from the end of the link for deduplication
@@ -88,7 +204,7 @@ class Page:
                 continue
             if link.href not in PAGES:
                 # Create a new page and add it to PAGES
-                print(f'Adding {link.href} to PAGES')
+                print(f'{len(PAGES)} Adding {link.href} to PAGES')
                 new_page = type(self)(link.href)
                 PAGES[link.href] = new_page
                 new_page.fetch_and_process()
@@ -96,38 +212,6 @@ class Page:
     @property
     def url(self):
         return os.path.join(DOMAIN, self.path)
-
-    @property
-    def _cache_fname(self):
-        sha = hashlib.sha256()
-        sha.update(self.url.encode())
-        return os.path.join(self.CACHE_DIR, sha.hexdigest())
-
-    def _fetch(self):
-        """
-        First attempt to read from filesystem cache.
-        Otherwise fetch from the internet
-        """
-        try:
-            # First attempt to read from cache
-            with open(self._cache_fname) as reader:
-                return reader.read()
-            print(f'Found {self.url} from cache')
-        except FileNotFoundError:
-            # Fetch from network
-            print(f'fetching {self.url}')
-            req = requests.get(self.url)
-            text = req.text
-            # Save to cache for next time
-            with open(self._cache_fname, 'w') as writer:
-                writer.write(text)
-            return text
-
-    def _filename(self):
-        """
-        To make fewer server request (and to improve speed
-        while prototyping)
-        """
 
 
 def fetch_all():
@@ -215,7 +299,7 @@ ul,ol{
     {% endif %}
         <ul>
             {% for link in page.external_links %}
-                <li class='elink'><a href='{{ link.href }}'>{{ link.href }}</a> &nbsp;  "{{ link.text }}"</li>
+                <li class='elink'><a href='{{ link.href }}'>{{ link.href }}</a> &nbsp;  "{{ link.title }}"</li>
             {% endfor %}
         </ul>
     </div>
