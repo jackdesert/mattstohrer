@@ -1,7 +1,10 @@
+import ipdb
+from urllib.parse import urlparse
 import hashlib
 import os
 from pathlib import Path
 from time import sleep
+import re
 
 import ipdb
 import requests
@@ -9,14 +12,20 @@ import urllib3
 from bs4 import BeautifulSoup
 from jinja2 import Template
 
+
+
+UTF8 = 'utf-8'
 DOMAIN = 'https://www.stohrermusic.com/'
 PAGES = {}
 TITLE = 'The Complete Works of Matt Stohrer'
 OUTPUT_FNAME = 'index.html'
 
+# Most links include the www, some do not
+INTERNAL_LINK_REGEX = re.compile(r'^https?://(www\.)?stohrermusic.com')
+
 # Use a common user agent so some sites like theowanne.com will return 200 instead of 403
 USER_AGENT = (
-    'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1'
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36'
 )
 
 
@@ -38,7 +47,8 @@ class CacheUtil:
         """
         sha = hashlib.sha256()
         sha.update(url.encode())
-        return os.path.join(cls.CACHE_DIR, sha.hexdigest())
+        domain = urlparse(url).netloc
+        return os.path.join(cls.CACHE_DIR, f'{domain}__{sha.hexdigest()}')
 
     @classmethod
     def invalidate(cls, url):
@@ -84,16 +94,17 @@ class Fetchable:
             # Fetch from network
             pass
 
-        print(f'fetching {self.url}')
+        print(f'  fetching {self.url}')
         headers = {'User-agent': USER_AGENT}
         sleep(1)
         try:
-            req = requests.get(self.url, headers=headers, verify=False, timeout=60)
+            req = requests.get(self.url, headers=headers, timeout=60)
             text = req.text
         except (
             requests.exceptions.InvalidSchema,
             requests.exceptions.InvalidURL,
             requests.exceptions.ConnectionError,
+            requests.exceptions.TooManyRedirects,
             urllib3.exceptions.NewConnectionError,
         ) as exc:
             # Set the title to show up
@@ -105,9 +116,6 @@ class Fetchable:
 
 
 class Link(Fetchable):
-    href: str
-    text: str
-
     __slots__ = ('href', 'text')
 
     def __init__(self, href, text):
@@ -120,7 +128,7 @@ class Link(Fetchable):
         If this a link to a page on Matt's site, return True.
         Otherwise, return False.
         """
-        return DOMAIN in self.href
+        return bool(INTERNAL_LINK_REGEX.search(self.href))
 
     @property
     def url(self):
@@ -137,8 +145,17 @@ class Link(Fetchable):
         if not doc.title:
             return f'{self.url} (No title)'
         title = doc.title.text
-        print(f'{self.href}: {title}')
+        youtube = ' - YouTube'
+        if title.endswith(youtube):
+            title = title.replace(youtube, '')
+        #print(f'{self.href}: {title}')
         return title
+
+    def title_sortable(self):
+        """
+        Callable so you can sort on it
+        """
+        return self.title.lower()
 
 
 class Page(Fetchable):
@@ -184,7 +201,7 @@ class Page(Fetchable):
                 or href.endswith('.jpeg')
                 or href == 'https://generatepress.com'
             ):
-                print(f'    skipping because href is {href}')
+                #print(f'    skipping because href is {href}')
                 continue
 
             # Remove `#` anchor from the end of the link for deduplication
@@ -219,9 +236,31 @@ def fetch_all():
     PAGES[DOMAIN] = base
     base.fetch_and_process()
 
+def youtube_links():
+    """
+    To populated saved-youtube.html, first open Matt's channel,
+    click on "videos", and scroll to the bottom until you finally
+    get to the bottom of the infinite scroll.
+
+    Then copy the outer html of the "body" tag, and paste it
+    into TextEdit.
+    """
+    print('\nFETCHING YouTube Links')
+    with open('saved-youtube.html', encoding='utf-8') as reader:
+        html = reader.read()
+    PATTERN = r'href="/watch\?v=.+?"'
+    hrefs = set(re.findall(PATTERN, html))
+    links = set()
+    for href in hrefs:
+        # Crop href to omit any &t=x at the end
+        ref = href[7:26]
+        ref = f'https://youtube.com/{ref}'
+        link = Link(ref, '')
+        links.add(link)
+    return sorted(links, key=Link.title_sortable)
 
 def build_page():
-    html = template().render(title=TITLE, pages=sorted(PAGES.items()))
+    html = template().render(title=TITLE, pages=sorted(PAGES.items()), youtube_links=youtube_links())
     with open(OUTPUT_FNAME, 'w') as writer:
         writer.write(html)
     print(f'Output written to {OUTPUT_FNAME}')
@@ -289,6 +328,8 @@ ul,ol{
     <p>
     Happy saxophone repairing!
     </p>
+
+    <h2>Pages</h2>
     <ol>
     {% for url, page in pages %}
     <div class='page {{ loop.cycle("odd", "even") }}'>
@@ -303,6 +344,15 @@ ul,ol{
             {% endfor %}
         </ul>
     </div>
+    {% endfor %}
+    </ol>
+
+    <h2>Youtube Videos</h2>
+    <ol>
+    {% for link in youtube_links %}
+        <div class='page {{ loop.cycle("odd", "even") }}'>
+        Video {{ loop.index }}: <a href='{{ link.url }}'>{{ link.title }}</a>
+        </div>
     {% endfor %}
     </ol>
 </main>
