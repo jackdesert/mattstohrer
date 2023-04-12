@@ -12,6 +12,8 @@ import urllib3
 from bs4 import BeautifulSoup
 from jinja2 import Template
 
+from models.extra import Extra
+
 
 
 UTF8 = 'utf-8'
@@ -260,7 +262,7 @@ def youtube_links():
     return sorted(links, key=Link.title_sortable)
 
 def build_page():
-    html = template().render(title=TITLE, pages=sorted(PAGES.items()), youtube_links=youtube_links())
+    html = template().render(title=TITLE, pages=sorted(PAGES.items()), youtube_links=youtube_links(), extra_links=Extra.LINKS)
     with open(OUTPUT_FNAME, 'w') as writer:
         writer.write(html)
     print(f'Output written to {OUTPUT_FNAME}')
@@ -309,8 +311,13 @@ ul,ol{
 .elink{
     font-size: 1.1rem;
     padding-left: 2rem;
-    font-family: arial;
+    font-family: sans-serif,arial;
     margin-top: 0.4rem;
+}
+.divider{
+    background: green;
+    height: 5rem;
+    width: 100%;
 }
 .footer{
     margin: 2rem 0;
@@ -347,6 +354,8 @@ ul,ol{
     {% endfor %}
     </ol>
 
+    <div class='divider'></div>
+
     <h2>Youtube Videos</h2>
     <ol>
     {% for link in youtube_links %}
@@ -355,6 +364,14 @@ ul,ol{
         </div>
     {% endfor %}
     </ol>
+
+    <div class='divider'></div>
+    <h2>Extra</h2>
+    {% for link, blurb in extra_links.items() %}
+        <div class='page {{ loop.cycle("odd", "even") }}'>
+        Extra {{ loop.index }}: <a href='{{ link }}'>{{ blurb }}</a>
+        </div>
+    {% endfor %}
 </main>
 <hr />
 <div class='footer'>
