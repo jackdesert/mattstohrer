@@ -298,6 +298,9 @@ html,div,ul,ol,h1,h2,h3{
 h1{
     font-size: 2rem;
 }
+h2{
+    1.6rem;
+}
 p{
     max-width: 40rem;
 }
