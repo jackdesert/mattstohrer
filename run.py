@@ -25,6 +25,8 @@ OUTPUT_FNAME = 'index.html'
 # Most links include the www, some do not
 INTERNAL_LINK_REGEX = re.compile(r'^https?://(www\.)?stohrermusic.com')
 
+ENDS_IN_PAGE_REGEX = re.compile(r'/page/\d+/$')
+
 # Use a common user agent so some sites like theowanne.com will return 200 instead of 403
 USER_AGENT = (
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36'
@@ -202,6 +204,7 @@ class Page(Fetchable):
                 or href.endswith('.JPG')
                 or href.endswith('.jpeg')
                 or href == 'https://generatepress.com'
+                or ENDS_IN_PAGE_REGEX.search(href)
             ):
                 #print(f'    skipping because href is {href}')
                 continue
